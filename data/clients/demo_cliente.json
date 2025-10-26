@@ -1,0 +1,24 @@
+{
+  "name": "Demo Cliente",
+  "service": "Consultoría Premium",
+  "notes": "Para el video",
+  "created_at": "2025-10-26T02:34:38.383239",
+  "updated_at": "2025-10-26T02:35:47.566214",
+  "history": [
+    {
+      "action": "created",
+      "service": "Consultoría",
+      "notes": "Para el video",
+      "timestamp": "2025-10-26T02:34:38.383280"
+    },
+    {
+      "action": "updated",
+      "timestamp": "2025-10-26T02:35:47.566279",
+      "service": "Consultoría Premium"
+    },
+    {
+      "action": "consulted",
+      "timestamp": "2025-10-26T02:36:03.564060"
+    }
+  ]
+}

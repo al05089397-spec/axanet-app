@@ -1,0 +1,26 @@
+# Axanet - Python .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.class
+*.so
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+*~
+
+# Entornos virtuales
+venv/
+env/
+.env
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-*
+
+Thumbs.db
+desktop.ini
