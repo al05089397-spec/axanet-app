@@ -1,15 +1,21 @@
 {
   "name": "Test Auto Workflow",
-  "service": "Prueba automatica",
-  "notes": "Testing automatic trigger",
+  "service": "Servicio actualizado",
+  "notes": "Nueva nota",
   "created_at": "2025-10-26T01:49:53.439631",
-  "updated_at": "2025-10-26T01:49:53.439676",
+  "updated_at": "2025-10-26T02:05:01.797378",
   "history": [
     {
       "action": "created",
       "service": "Prueba automatica",
       "notes": "Testing automatic trigger",
       "timestamp": "2025-10-26T01:49:53.439679"
+    },
+    {
+      "action": "updated",
+      "timestamp": "2025-10-26T02:05:01.797432",
+      "service": "Servicio actualizado",
+      "notes": "Nueva nota"
     }
   ]
 }
