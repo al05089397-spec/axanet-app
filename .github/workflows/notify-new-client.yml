@@ -1,0 +1,149 @@
+name: 🆕 Notificar Nuevo Cliente
+
+on:
+  push:
+    branches: [main]
+    paths: ['data/**']
+  workflow_dispatch:
+    inputs:
+      client_name:
+        description: 'Nombre del cliente (para prueba manual)'
+        required: true
+        default: 'Cliente Test'
+
+jobs:
+  notify-new-client:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[NEW_CLIENT]') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 📋 Leer configuración del equipo
+        id: team-config
+        run: |
+          if [[ -f "team.json" ]]; then
+            echo "TEAM_EXISTS=true" >> $GITHUB_OUTPUT
+            
+            # Extraer miembros del equipo
+            MEMBERS=$(jq -r '.members[].github' team.json | tr '\n' ' ')
+            echo "TEAM_MEMBERS=$MEMBERS" >> $GITHUB_OUTPUT
+            
+            # Verificar si las notificaciones están habilitadas
+            ENABLED=$(jq -r '.notifications.new_client.enabled' team.json)
+            CREATE_ISSUE=$(jq -r '.notifications.new_client.create_issue' team.json)
+            echo "NOTIFICATIONS_ENABLED=$ENABLED" >> $GITHUB_OUTPUT
+            echo "CREATE_ISSUE=$CREATE_ISSUE" >> $GITHUB_OUTPUT
+          else
+            echo "TEAM_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Archivo team.json no encontrado"
+          fi
+
+      - name: 🔍 Extraer información del commit
+        id: commit-info
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            CLIENT_NAME="${{ github.event.inputs.client_name }}"
+          else
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            CLIENT_NAME=$(echo "$COMMIT_MSG" | grep -oP '\[NEW_CLIENT\] name=\K.*')
+          fi
+          
+          echo "CLIENT_NAME=$CLIENT_NAME" >> $GITHUB_OUTPUT
+          echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+          echo "COMMIT_URL=${{ github.event.head_commit.url }}" >> $GITHUB_OUTPUT
+
+      - name: 📊 Analizar cambios en datos
+        id: data-analysis
+        run: |
+          # Contar archivos de clientes
+          if [[ -d "data/clients" ]]; then
+            CLIENT_COUNT=$(find data/clients -name "*.json" | wc -l)
+            echo "CLIENT_COUNT=$CLIENT_COUNT" >> $GITHUB_OUTPUT
+            
+            # Verificar si existe el archivo del nuevo cliente
+            if [[ -f "data/index.json" ]]; then
+              NEW_CLIENT_FILE=$(jq -r --arg name "${{ steps.commit-info.outputs.CLIENT_NAME }}" '.[$name] // empty' data/index.json)
+              echo "CLIENT_FILE=$NEW_CLIENT_FILE" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "CLIENT_COUNT=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📝 Generar resumen
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🎉 Nuevo Cliente Registrado
+          
+          ## 📋 Detalles
+          - **Cliente**: ${{ steps.commit-info.outputs.CLIENT_NAME }}
+          - **Fecha**: $(date '+%Y-%m-%d %H:%M:%S UTC')
+          - **Commit**: [${{ steps.commit-info.outputs.COMMIT_SHA }}](${{ steps.commit-info.outputs.COMMIT_URL }})
+          - **Total de clientes**: ${{ steps.data-analysis.outputs.CLIENT_COUNT }}
+          
+          ## 👥 Equipo notificado
+          ${{ steps.team-config.outputs.TEAM_MEMBERS }}
+          
+          ## ⚡ Próximos pasos
+          - [ ] Revisar información del cliente
+          - [ ] Asignar gestor de cuenta
+          - [ ] Programar primera reunión
+          - [ ] Actualizar CRM principal
+          
+          ---
+          *Generado automáticamente por Axanet GitHub Actions*
+          EOF
+
+      - name: 🔔 Crear Issue de notificación
+        if: steps.team-config.outputs.CREATE_ISSUE == 'true' && steps.team-config.outputs.NOTIFICATIONS_ENABLED == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { CLIENT_NAME } = process.env;
+            const { TEAM_MEMBERS } = process.env;
+            const { COMMIT_SHA } = process.env;
+            
+            const issueBody = `
+            ## 🆕 Nuevo Cliente Registrado
+            
+            **Cliente**: ${CLIENT_NAME}
+            **Fecha**: ${new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+            **Commit**: ${COMMIT_SHA}
+            **Total clientes**: ${{ steps.data-analysis.outputs.CLIENT_COUNT }}
+            
+            ### 👥 Equipo asignado
+            ${TEAM_MEMBERS}
+            
+            ### ✅ Lista de verificación
+            - [ ] Verificar datos del cliente
+            - [ ] Asignar gestor de cuenta  
+            - [ ] Contactar al cliente
+            - [ ] Actualizar sistemas internos
+            - [ ] Programar seguimiento
+            
+            ### 🔗 Enlaces útiles
+            - [Ver commit completo](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            - [Revisar archivos de datos](https://github.com/${{ github.repository }}/tree/main/data)
+            
+            ---
+            *Issue creado automáticamente por Axanet Workflow*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🆕 Nuevo Cliente: ${CLIENT_NAME}`,
+              body: issueBody,
+              labels: ['nuevo-cliente', 'notificación', 'alta-prioridad']
+            });
+        env:
+          CLIENT_NAME: ${{ steps.commit-info.outputs.CLIENT_NAME }}
+          TEAM_MEMBERS: ${{ steps.team-config.outputs.TEAM_MEMBERS }}
+          COMMIT_SHA: ${{ steps.commit-info.outputs.COMMIT_SHA }}
+
+      - name: ✅ Workflow completado
+        run: |
+          echo "🎉 Notificación de nuevo cliente enviada exitosamente"
+          echo "Cliente: ${{ steps.commit-info.outputs.CLIENT_NAME }}"
+          echo "Equipo notificado: ${{ steps.team-config.outputs.TEAM_MEMBERS }}"

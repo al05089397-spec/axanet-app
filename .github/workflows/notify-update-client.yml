@@ -1,0 +1,190 @@
+name: 🔄 Notificar Actualización Cliente
+
+on:
+  push:
+    branches: [main]
+    paths: ['data/**']
+  workflow_dispatch:
+    inputs:
+      client_name:
+        description: 'Nombre del cliente actualizado'
+        required: true
+        default: 'Cliente Test'
+      changes:
+        description: 'Descripción de cambios'
+        required: false
+        default: 'Actualización de servicio'
+
+jobs:
+  notify-update-client:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[UPDATE_CLIENT]') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Necesario para comparar cambios
+        
+      - name: 📋 Leer configuración del equipo
+        id: team-config
+        run: |
+          if [[ -f "team.json" ]]; then
+            echo "TEAM_EXISTS=true" >> $GITHUB_OUTPUT
+            MEMBERS=$(jq -r '.members[].github' team.json | tr '\n' ' ')
+            echo "TEAM_MEMBERS=$MEMBERS" >> $GITHUB_OUTPUT
+            
+            ENABLED=$(jq -r '.notifications.update_client.enabled' team.json)
+            CREATE_ISSUE=$(jq -r '.notifications.update_client.create_issue' team.json)
+            echo "NOTIFICATIONS_ENABLED=$ENABLED" >> $GITHUB_OUTPUT
+            echo "CREATE_ISSUE=$CREATE_ISSUE" >> $GITHUB_OUTPUT
+          else
+            echo "TEAM_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🔍 Extraer información del commit
+        id: commit-info
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            CLIENT_NAME="${{ github.event.inputs.client_name }}"
+            CHANGES="${{ github.event.inputs.changes }}"
+          else
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            CLIENT_NAME=$(echo "$COMMIT_MSG" | grep -oP '\[UPDATE_CLIENT\] name=\K.*')
+            CHANGES="Actualización desde commit"
+          fi
+          
+          echo "CLIENT_NAME=$CLIENT_NAME" >> $GITHUB_OUTPUT
+          echo "CHANGES=$CHANGES" >> $GITHUB_OUTPUT
+          echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+
+      - name: 📊 Analizar cambios
+        id: changes-analysis
+        run: |
+          # Buscar el archivo del cliente en el índice
+          if [[ -f "data/index.json" ]]; then
+            CLIENT_FILE=$(jq -r --arg name "${{ steps.commit-info.outputs.CLIENT_NAME }}" '.[$name] // empty' data/index.json)
+            echo "CLIENT_FILE=$CLIENT_FILE" >> $GITHUB_OUTPUT
+            
+            if [[ -n "$CLIENT_FILE" && -f "data/clients/$CLIENT_FILE" ]]; then
+              # Obtener información actual del cliente
+              CURRENT_SERVICE=$(jq -r '.service // "N/A"' "data/clients/$CLIENT_FILE")
+              CURRENT_NOTES=$(jq -r '.notes // "N/A"' "data/clients/$CLIENT_FILE")
+              UPDATED_AT=$(jq -r '.updated_at // "N/A"' "data/clients/$CLIENT_FILE")
+              
+              echo "CURRENT_SERVICE=$CURRENT_SERVICE" >> $GITHUB_OUTPUT
+              echo "CURRENT_NOTES=$CURRENT_NOTES" >> $GITHUB_OUTPUT
+              echo "UPDATED_AT=$UPDATED_AT" >> $GITHUB_OUTPUT
+              
+              # Obtener historial reciente
+              RECENT_UPDATES=$(jq -r '.history[-3:] | .[] | "• " + .action + " (" + .timestamp + ")"' "data/clients/$CLIENT_FILE" | tail -3)
+              echo "RECENT_UPDATES<<EOF" >> $GITHUB_OUTPUT
+              echo "$RECENT_UPDATES" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            fi
+          fi
+          
+          # Analizar diferencias en archivos
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "data/clients/" | wc -l)
+          echo "CHANGED_FILES=$CHANGED_FILES" >> $GITHUB_OUTPUT
+
+      - name: 📝 Generar resumen detallado
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🔄 Cliente Actualizado
+          
+          ## 📋 Información del cliente
+          - **Cliente**: ${{ steps.commit-info.outputs.CLIENT_NAME }}
+          - **Servicio actual**: ${{ steps.changes-analysis.outputs.CURRENT_SERVICE }}
+          - **Notas**: ${{ steps.changes-analysis.outputs.CURRENT_NOTES }}
+          - **Última actualización**: ${{ steps.changes-analysis.outputs.UPDATED_AT }}
+          
+          ## 📈 Historial reciente
+          ${{ steps.changes-analysis.outputs.RECENT_UPDATES }}
+          
+          ## 🔍 Detalles del cambio  
+          - **Commit**: [${{ steps.commit-info.outputs.COMMIT_SHA }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          - **Archivos modificados**: ${{ steps.changes-analysis.outputs.CHANGED_FILES }}
+          - **Descripción**: ${{ steps.commit-info.outputs.CHANGES }}
+          
+          ## 👥 Equipo notificado
+          ${{ steps.team-config.outputs.TEAM_MEMBERS }}
+          
+          ## ⚡ Acciones sugeridas
+          - [ ] Revisar cambios realizados
+          - [ ] Verificar con el gestor de cuenta
+          - [ ] Actualizar documentación relacionada  
+          - [ ] Notificar al cliente si es necesario
+          
+          ---
+          *Actualización registrada automáticamente*
+          EOF
+
+      - name: 🔔 Crear Issue de seguimiento
+        if: steps.team-config.outputs.CREATE_ISSUE == 'true' && steps.team-config.outputs.NOTIFICATIONS_ENABLED == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { CLIENT_NAME, CHANGES, COMMIT_SHA } = process.env;
+            const { TEAM_MEMBERS } = process.env;
+            const { CURRENT_SERVICE, CURRENT_NOTES } = process.env;
+            
+            const issueBody = `
+            ## 🔄 Cliente Actualizado
+            
+            **Cliente**: ${CLIENT_NAME}  
+            **Fecha**: ${new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' })}
+            **Commit**: ${COMMIT_SHA}
+            
+            ### 📋 Estado actual
+            - **Servicio**: ${CURRENT_SERVICE || 'N/A'}
+            - **Notas**: ${CURRENT_NOTES || 'N/A'}
+            
+            ### 🔄 Cambios realizados
+            ${CHANGES}
+            
+            ### 👥 Equipo a revisar
+            ${TEAM_MEMBERS}
+            
+            ### ✅ Tareas de seguimiento
+            - [ ] Revisar cambios realizados
+            - [ ] Validar con gestor de cuenta
+            - [ ] Actualizar sistemas externos
+            - [ ] Confirmar con cliente si aplicable
+            - [ ] Documentar en CRM
+            
+            ### 🔗 Enlaces
+            - [Ver commit](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            - [Historial del cliente](https://github.com/${{ github.repository }}/blob/main/data/clients/)
+            
+            ---
+            *Issue de seguimiento generado automáticamente*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔄 Actualización: ${CLIENT_NAME}`,
+              body: issueBody,
+              labels: ['actualización', 'seguimiento', 'cliente']
+            });
+        env:
+          CLIENT_NAME: ${{ steps.commit-info.outputs.CLIENT_NAME }}
+          CHANGES: ${{ steps.commit-info.outputs.CHANGES }}
+          COMMIT_SHA: ${{ steps.commit-info.outputs.COMMIT_SHA }}
+          TEAM_MEMBERS: ${{ steps.team-config.outputs.TEAM_MEMBERS }}
+          CURRENT_SERVICE: ${{ steps.changes-analysis.outputs.CURRENT_SERVICE }}
+          CURRENT_NOTES: ${{ steps.changes-analysis.outputs.CURRENT_NOTES }}
+
+      - name: 📊 Generar métricas
+        run: |
+          echo "📊 Métricas de la actualización:"
+          echo "Cliente: ${{ steps.commit-info.outputs.CLIENT_NAME }}"
+          echo "Archivos modificados: ${{ steps.changes-analysis.outputs.CHANGED_FILES }}"
+          echo "Equipo notificado: $(echo '${{ steps.team-config.outputs.TEAM_MEMBERS }}' | wc -w) miembros"
+
+      - name: ✅ Finalización
+        run: |
+          echo "🔄 Notificación de actualización completada"
+          echo "✅ Issue creado: ${{ steps.team-config.outputs.CREATE_ISSUE }}"
+          echo "✅ Resumen generado en Actions"

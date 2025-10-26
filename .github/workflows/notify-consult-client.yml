@@ -1,0 +1,235 @@
+name: 🔍 Registrar Consulta Cliente
+
+on:
+  push:
+    branches: [main]
+    paths: ['data/**']
+  workflow_dispatch:
+    inputs:
+      client_name:
+        description: 'Nombre del cliente consultado'
+        required: true
+        default: 'Cliente Test'
+      reason:
+        description: 'Motivo de la consulta'
+        required: false
+        default: 'Consulta de información'
+
+jobs:
+  register-consult:
+    runs-on: ubuntu-latest
+    if: contains(github.event.head_commit.message, '[CONSULT_CLIENT]') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: 📥 Checkout código
+        uses: actions/checkout@v4
+        
+      - name: 📋 Leer configuración del equipo
+        id: team-config
+        run: |
+          if [[ -f "team.json" ]]; then
+            echo "TEAM_EXISTS=true" >> $GITHUB_OUTPUT
+            
+            ENABLED=$(jq -r '.notifications.consult_client.enabled' team.json)
+            CREATE_ISSUE=$(jq -r '.notifications.consult_client.create_issue' team.json)
+            MENTION_TEAM=$(jq -r '.notifications.consult_client.mention_team' team.json)
+            
+            echo "NOTIFICATIONS_ENABLED=$ENABLED" >> $GITHUB_OUTPUT
+            echo "CREATE_ISSUE=$CREATE_ISSUE" >> $GITHUB_OUTPUT
+            echo "MENTION_TEAM=$MENTION_TEAM" >> $GITHUB_OUTPUT
+            
+            if [[ "$MENTION_TEAM" == "true" ]]; then
+              MEMBERS=$(jq -r '.members[].github' team.json | tr '\n' ' ')
+              echo "TEAM_MEMBERS=$MEMBERS" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "TEAM_EXISTS=false" >> $GITHUB_OUTPUT
+            echo "NOTIFICATIONS_ENABLED=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 🔍 Extraer información
+        id: consult-info
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            CLIENT_NAME="${{ github.event.inputs.client_name }}"
+            REASON="${{ github.event.inputs.reason }}"
+          else
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            CLIENT_NAME=$(echo "$COMMIT_MSG" | grep -oP '\[CONSULT_CLIENT\] name=\K.*')
+            REASON="Consulta desde aplicación CLI"
+          fi
+          
+          echo "CLIENT_NAME=$CLIENT_NAME" >> $GITHUB_OUTPUT
+          echo "REASON=$REASON" >> $GITHUB_OUTPUT
+          echo "TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+          echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_OUTPUT
+
+      - name: 📊 Obtener información del cliente
+        id: client-info
+        run: |
+          if [[ -f "data/index.json" ]]; then
+            CLIENT_FILE=$(jq -r --arg name "${{ steps.consult-info.outputs.CLIENT_NAME }}" '.[$name] // empty' data/index.json)
+            
+            if [[ -n "$CLIENT_FILE" && -f "data/clients/$CLIENT_FILE" ]]; then
+              echo "CLIENT_EXISTS=true" >> $GITHUB_OUTPUT
+              
+              SERVICE=$(jq -r '.service // "N/A"' "data/clients/$CLIENT_FILE")
+              NOTES=$(jq -r '.notes // "N/A"' "data/clients/$CLIENT_FILE")
+              CREATED_AT=$(jq -r '.created_at // "N/A"' "data/clients/$CLIENT_FILE")
+              UPDATED_AT=$(jq -r '.updated_at // "N/A"' "data/clients/$CLIENT_FILE")
+              
+              echo "SERVICE=$SERVICE" >> $GITHUB_OUTPUT
+              echo "NOTES=$NOTES" >> $GITHUB_OUTPUT
+              echo "CREATED_AT=$CREATED_AT" >> $GITHUB_OUTPUT
+              echo "UPDATED_AT=$UPDATED_AT" >> $GITHUB_OUTPUT
+              
+              # Contar consultas en el historial
+              CONSULT_COUNT=$(jq '[.history[] | select(.action == "consulted")] | length' "data/clients/$CLIENT_FILE")
+              echo "CONSULT_COUNT=$CONSULT_COUNT" >> $GITHUB_OUTPUT
+              
+              # Obtener últimas 3 acciones
+              RECENT_HISTORY=$(jq -r '.history[-3:] | .[] | "• " + .action + " - " + (.timestamp // "N/A")' "data/clients/$CLIENT_FILE")
+              echo "RECENT_HISTORY<<EOF" >> $GITHUB_OUTPUT
+              echo "$RECENT_HISTORY" >> $GITHUB_OUTPUT
+              echo "EOF" >> $GITHUB_OUTPUT
+            else
+              echo "CLIENT_EXISTS=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "CLIENT_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📈 Generar estadísticas de consultas
+        id: stats
+        run: |
+          # Contar total de consultas en todos los archivos
+          TOTAL_CONSULTS=0
+          if [[ -d "data/clients" ]]; then
+            for file in data/clients/*.json; do
+              if [[ -f "$file" ]]; then
+                COUNT=$(jq '[.history[]? | select(.action == "consulted")] | length' "$file" 2>/dev/null || echo 0)
+                TOTAL_CONSULTS=$((TOTAL_CONSULTS + COUNT))
+              fi
+            done
+          fi
+          
+          echo "TOTAL_CONSULTS=$TOTAL_CONSULTS" >> $GITHUB_OUTPUT
+          
+          # Obtener estadísticas del día actual
+          TODAY=$(date -u +%Y-%m-%d)
+          TODAY_CONSULTS=0
+          
+          if [[ -d "data/clients" ]]; then
+            for file in data/clients/*.json; do
+              if [[ -f "$file" ]]; then
+                COUNT=$(jq --arg today "$TODAY" '[.history[]? | select(.action == "consulted" and (.timestamp | startswith($today)))] | length' "$file" 2>/dev/null || echo 0)
+                TODAY_CONSULTS=$((TODAY_CONSULTS + COUNT))
+              fi
+            done
+          fi
+          
+          echo "TODAY_CONSULTS=$TODAY_CONSULTS" >> $GITHUB_OUTPUT
+
+      - name: 📝 Generar resumen de consulta
+        if: steps.team-config.outputs.NOTIFICATIONS_ENABLED == 'true'
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🔍 Consulta de Cliente Registrada
+          
+          ## 📋 Información consultada
+          - **Cliente**: ${{ steps.consult-info.outputs.CLIENT_NAME }}
+          - **Motivo**: ${{ steps.consult-info.outputs.REASON }}
+          - **Fecha/Hora**: ${{ steps.consult-info.outputs.TIMESTAMP }}
+          - **Commit**: [${{ steps.consult-info.outputs.COMMIT_SHA }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          
+          ## 👤 Datos del cliente
+          - **Servicio**: ${{ steps.client-info.outputs.SERVICE }}
+          - **Notas**: ${{ steps.client-info.outputs.NOTES }}
+          - **Cliente desde**: ${{ steps.client-info.outputs.CREATED_AT }}
+          - **Última actualización**: ${{ steps.client-info.outputs.UPDATED_AT }}
+          - **Consultas previas**: ${{ steps.client-info.outputs.CONSULT_COUNT }}
+          
+          ## 📈 Historial reciente
+          ${{ steps.client-info.outputs.RECENT_HISTORY }}
+          
+          ## 📊 Estadísticas de consultas
+          - **Total de consultas**: ${{ steps.stats.outputs.TOTAL_CONSULTS }}
+          - **Consultas hoy**: ${{ steps.stats.outputs.TODAY_CONSULTS }}
+          
+          ## 🔍 Patrón de uso
+          Este registro ayuda a:
+          - Rastrear actividad de consultas
+          - Identificar clientes más consultados  
+          - Monitorear patrones de acceso
+          - Generar reportes de actividad
+          
+          ---
+          *Consulta registrada automáticamente por Axanet*
+          EOF
+
+      - name: 📊 Log de consulta
+        run: |
+          echo "🔍 Consulta registrada exitosamente"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Cliente: ${{ steps.consult-info.outputs.CLIENT_NAME }}"
+          echo "Existe: ${{ steps.client-info.outputs.CLIENT_EXISTS }}"
+          echo "Servicio: ${{ steps.client-info.outputs.SERVICE }}"
+          echo "Consultas previas: ${{ steps.client-info.outputs.CONSULT_COUNT }}"
+          echo "Total consultas sistema: ${{ steps.stats.outputs.TOTAL_CONSULTS }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: 🔔 Crear Issue (opcional)
+        if: steps.team-config.outputs.CREATE_ISSUE == 'true' && steps.team-config.outputs.NOTIFICATIONS_ENABLED == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { CLIENT_NAME, REASON, TIMESTAMP } = process.env;
+            const { SERVICE, CONSULT_COUNT } = process.env;
+            const { TEAM_MEMBERS } = process.env;
+            
+            const issueBody = `
+            ## 🔍 Consulta de Cliente Registrada
+            
+            **Cliente**: ${CLIENT_NAME}
+            **Motivo**: ${REASON}  
+            **Timestamp**: ${TIMESTAMP}
+            
+            ### 📋 Información del cliente
+            - **Servicio**: ${SERVICE || 'N/A'}
+            - **Consultas previas**: ${CONSULT_COUNT || '0'}
+            
+            ### 📊 Contexto
+            Esta consulta ha sido registrada para fines de auditoría y seguimiento de actividad.
+            
+            ${TEAM_MEMBERS ? `### 👥 FYI: ${TEAM_MEMBERS}` : ''}
+            
+            ### 🔗 Enlaces
+            - [Ver commit](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+            - [Datos del cliente](https://github.com/${{ github.repository }}/tree/main/data/clients)
+            
+            ---
+            *Registro automático de consulta*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔍 Consulta: ${CLIENT_NAME}`,
+              body: issueBody,
+              labels: ['consulta', 'registro', 'info']
+            });
+        env:
+          CLIENT_NAME: ${{ steps.consult-info.outputs.CLIENT_NAME }}
+          REASON: ${{ steps.consult-info.outputs.REASON }}
+          TIMESTAMP: ${{ steps.consult-info.outputs.TIMESTAMP }}
+          SERVICE: ${{ steps.client-info.outputs.SERVICE }}
+          CONSULT_COUNT: ${{ steps.client-info.outputs.CONSULT_COUNT }}
+          TEAM_MEMBERS: ${{ steps.team-config.outputs.TEAM_MEMBERS }}
+
+      - name: ✅ Consulta procesada
+        run: |
+          echo "✅ Procesamiento de consulta completado"
+          echo "📊 Resumen disponible en GitHub Actions"
+          if [[ "${{ steps.team-config.outputs.CREATE_ISSUE }}" == "true" ]]; then
+            echo "🎫 Issue de registro creado"
+          fi
