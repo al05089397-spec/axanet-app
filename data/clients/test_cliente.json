@@ -1,0 +1,25 @@
+{
+  "name": "Test Cliente",
+  "service": "Desarrollo Web Full Stack",
+  "notes": "Ampliado el servicio",
+  "created_at": "2025-10-25T23:48:13.095070",
+  "updated_at": "2025-10-25T23:52:21.122190",
+  "history": [
+    {
+      "action": "created",
+      "service": "Desarrollo Web",
+      "notes": "",
+      "timestamp": "2025-10-25T23:48:13.095130"
+    },
+    {
+      "action": "consulted",
+      "timestamp": "2025-10-25T23:50:27.483322"
+    },
+    {
+      "action": "updated",
+      "timestamp": "2025-10-25T23:52:21.122248",
+      "service": "Desarrollo Web Full Stack",
+      "notes": "Ampliado el servicio"
+    }
+  ]
+}

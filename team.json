@@ -1,0 +1,40 @@
+{
+  "project": "Axanet - Gestor de Clientes",
+  "description": "Sistema de gestión de clientes con automatización GitHub Actions",
+  "members": [
+    {
+      "name": "Alex Desarrollador",
+      "github": "@alex-dev-2024",
+      "role": "Full Stack Developer",
+      "email": "alex@axanet-team.com"
+    },
+    {
+      "name": "Sofia QA",
+      "github": "@sofia-qa-lead",
+      "role": "Quality Assurance Lead",
+      "email": "sofia@axanet-team.com"
+    }
+  ],
+  "notifications": {
+    "new_client": {
+      "enabled": true,
+      "create_issue": true,
+      "mention_team": true
+    },
+    "update_client": {
+      "enabled": true,
+      "create_issue": true,
+      "mention_team": true
+    },
+    "consult_client": {
+      "enabled": true,
+      "create_issue": false,
+      "mention_team": false
+    }
+  },
+  "repository": {
+    "owner": "al05089397-spec",
+    "name": "axanet-app",
+    "main_branch": "main"
+  }
+}
