@@ -1,4 +1,6 @@
 {
   "Test Cliente": "test_cliente.json",
-  "María García": "maría_garcía.json"
+  "María García": "maría_garcía.json",
+  "Cliente Actions Test": "cliente_actions_test.json",
+  "Test Workflow Auto": "test_workflow_auto.json"
 }
