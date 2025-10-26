@@ -16,6 +16,10 @@
       "timestamp": "2025-10-26T02:05:01.797432",
       "service": "Servicio actualizado",
       "notes": "Nueva nota"
+    },
+    {
+      "action": "consulted",
+      "timestamp": "2025-10-26T02:07:54.694962"
     }
   ]
 }
