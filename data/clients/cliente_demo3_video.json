@@ -1,29 +1,25 @@
 {
-  "name": "Cliente Demo Video",
+  "name": "Cliente Demo3 Video",
   "service": "Consultoría IT + DevOps",
   "notes": "Servicios expandidos",
-  "created_at": "2025-10-26T15:09:21.594915",
-  "updated_at": "2025-10-26T15:10:21.439340",
+  "created_at": "2025-10-26T17:31:38.248902",
+  "updated_at": "2025-10-26T17:32:52.411827",
   "history": [
     {
       "action": "created",
       "service": "Consultoría IT",
       "notes": "Cliente para demostración académica",
-      "timestamp": "2025-10-26T15:09:21.594980"
+      "timestamp": "2025-10-26T17:31:38.248949"
     },
     {
       "action": "consulted",
-      "timestamp": "2025-10-26T15:10:02.121506"
+      "timestamp": "2025-10-26T17:32:33.120008"
     },
     {
       "action": "updated",
-      "timestamp": "2025-10-26T15:10:21.439416",
+      "timestamp": "2025-10-26T17:32:52.411869",
       "service": "Consultoría IT + DevOps",
       "notes": "Servicios expandidos"
-    },
-    {
-      "action": "consulted",
-      "timestamp": "2025-10-26T17:13:59.023895"
     }
   ]
 }

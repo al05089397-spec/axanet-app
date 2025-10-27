@@ -6,5 +6,7 @@
   "Test Auto Workflow": "test_auto_workflow.json",
   "Demo Cliente": "demo_cliente.json",
   "Cliente Demo Video": "cliente_demo_video.json",
-  "Cliente Final Demo": "cliente_final_demo.json"
+  "Cliente Final Demo": "cliente_final_demo.json",
+  "Cliente Demo2 Video": "cliente_demo2_video.json",
+  "Cliente Demo3 Video": "cliente_demo3_video.json"
 }
